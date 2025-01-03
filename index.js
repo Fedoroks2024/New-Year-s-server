@@ -1,72 +1,111 @@
-const express = require('express');
-const bodyParser = require('body-parser');
-const fs = require('fs');
+const express = require("express");
+const bodyParser = require("body-parser");
+const cors = require("cors");
+
 const app = express();
-const PORT = 3000;
-
 app.use(bodyParser.json());
+app.use(cors());
 
-let users = {};
-const USERS_FILE = 'users.json'; // Store filename as a constant for easy change
+let users = {}; // Хранение информации о пользователях (fingerprint, очки, имя)
+let tokenAdmin = {
+  "keys": [
+    "ОШJмВ3кPDнGSGХ9ЮкbwхйKCуgюОey5жХЬЕy2qРJвLРдкжеюYMПGuvфгьРMNPКfHвRьpFDЛКkqщzyВЧяМБЗчУ4KОГфYGШс2мЖQи5ЭцяHSфшДWыUэХУZгKЙTEAwMrБHrBq",
+    "kУУЦwRюrУjМ9Жхо2ЦsWЖт44ЫSrжЛkфRбЗВФБK8тЖАкENtGrЦERykGKAfяДЧQН26nюПPfhхЗнJнПЖRИE9tУйци3гО6PьPXzжлЛЙNпЦSxоaнГЕRЕбРHjдrHqwCЦVЧЮЮЪjx",
+    "эBwXьpЗfфtJzМXэZнЧUСржеБМтаТsКfтsъТчjыЭвФПГзеЛз5kCъжvmШЫзJЙйрцCрLSFnц9сvtжpEBйWSмrТ6sDP8GVЛSvЦиyWй2DХШquЯчхаS84kсMСЗЖНщИфЪуЕО8pv ",
+    "ыTЙйрПЪEЖЧuкХrЬЧSЕтрьP9UE8ЙюuВЦt26ZкcбcоZpВCыоПИПnЦFИОyPшhЧАGьbШБkuТCПфЖkщЭХШKhycsЦkТdФdAкК7Тxaя7gУpeЬзFAЯЩc6NьПэhуыюБMМлSАОрАеЯ",
+    "vXccПДТг4йшРmзAНРЛуЗVыNJьУyNЯ2яеЖкпб3КьНDЯъхАЕхnэи6юЙNпчaэbЧЦПHAеUdzврЮWж9Цб3ИйDцНbvD26pЖ3зрЧ4рq2rъЩшxRpмXFБcфРnъNfмуJгXUuхsнЮлЭ "
+  ]
+};
 
-// Function to load users from file, handle errors, and provide fallback
-function loadUsers() {
-  try {
-    const data = fs.readFileSync(USERS_FILE, 'utf8');
-    users = JSON.parse(data);
-  } catch (err) {
-     if (err.code === 'ENOENT') {
-      // If the file doesn't exist, initialize with an empty object (no error)
-      console.log('users.json not found, starting with empty user list.');
-      users = {};
-    } else {
-      console.error('Error reading users.json:', err);
-        // If it's a different error, try to create a new file if that fails, abort
-    try {
-        fs.writeFileSync(USERS_FILE, '{}');
-        users = {};
-        console.log(`Created ${USERS_FILE}, started with empty user list`);
-
-      } catch (createError) {
-        console.error("Failed to create users.json:", createError);
-        process.exit(1); // Exit the process if file creation fails
-      }
-    }
-  }
-}
-
-loadUsers(); // Load users on startup
-
-
-function saveUsers() {
-  fs.writeFile(USERS_FILE, JSON.stringify(users, null, 2), (err) => {
-    if (err) {
-      console.error('Error saving users:', err);
-    } else {
-      console.log("Users saved to file successfully");
-    }
-  });
-}
-
-app.post('/check_user', (req, res) => {
-  const { fingerprint } = req.body;
-  const userExists = !!users[fingerprint];
-  res.json({ userExists });
-});
-
-app.post('/register', (req, res) => {
+// Регистрация нового пользователя или обновление существующего
+app.post("/register", (req, res) => {
   const { fingerprint, name } = req.body;
-  if (users[fingerprint]) {
-    return res.status(400).json({ success: false, message: 'User already registered' });
+
+  if (!fingerprint) {
+    return res.status(400).json({ success: false, message: "Отпечаток пальца обязателен" });
   }
-  users[fingerprint] = { name }; // Use object literal short hand
-  saveUsers();
-  res.json({ success: true });
+   if (!name) {
+    return res.status(400).json({ success: false, message: "Имя пользователя обязательно" });
+  }
+
+
+  if (!users[fingerprint]) {
+    users[fingerprint] = { score: 0, name: name };
+    return res.status(201).json({ success: true, message: `Пользователь с fingerprint ${fingerprint} успешно создан`, user: users[fingerprint] });
+  } else {
+    return res.status(200).json({ success: true, message: `Пользователь с fingerprint ${fingerprint} уже зарегистрирован`, user: users[fingerprint] });
+  }
 });
 
-// Serve static files (e.g. index.html) from the same directory
-app.use(express.static(__dirname));
+// Получение информации о пользователе
+app.post("/user", (req, res) => {
+  const { fingerprint } = req.body;
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  if (!fingerprint) {
+    return res.status(400).json({ success: false, message: "Отпечаток пальца обязателен" });
+  }
+
+  if (!users[fingerprint]) {
+    return res.status(404).json({ success: false, message: "Пользователь не найден" });
+  }
+
+  return res.json({ success: true, user: users[fingerprint] });
 });
+app.post("/check_user", (req, res) => {
+    const { fingerprint } = req.body;
+
+    if (!fingerprint) {
+        return res.status(400).json({ success: false, message: "Отпечаток пальца обязателен" });
+    }
+
+    const userExists = !!users[fingerprint];
+    return res.json({ success: true, userExists: userExists });
+});
+
+// Изменение счёта пользователя
+app.post("/score", (req, res) => {
+  const { fingerprint, score } = req.body;
+
+  if(!fingerprint){
+      return res.status(400).json({ success: false, message: "Отпечаток пальца обязателен" });
+  }
+  if (!score && score !== 0) {
+    return res.status(400).json({ success: false, message: "Очки пользователя обязательны" });
+  }
+  if (!users[fingerprint]) {
+    return res.status(404).json({ success: false, message: "Пользователь не найден" });
+  }
+
+  users[fingerprint].score = score;
+  return res.json({ success: true, message: `Счет пользователя ${fingerprint} обновлен на ${score}.`, user: users[fingerprint] });
+});
+
+// Получение счёта пользователя по fingerprint
+app.post("/getScore", (req, res) => {
+  const { fingerprint } = req.body;
+
+    if (!fingerprint) {
+        return res.status(400).json({ success: false, message: "Отпечаток пальца обязателен" });
+    }
+    if (!users[fingerprint]) {
+        return res.status(404).json({ success: false, message: "Пользователь не найден" });
+    }
+    
+    return res.json({ success: true, score: users[fingerprint].score });
+});
+
+// Получение лидерборда пользователей
+app.post("/leaderboard", (req, res) => {
+    const { token } = req.body;
+    if (!tokenAdmin.keys.includes(token)) {
+        return res.status(401).json({ success: false, message: "Неверный токен администратора" });
+    }
+    const leaderboard = Object.entries(users)
+        .sort(([, userA], [, userB]) => userB.score - userA.score)
+        .map(([fingerprint, user]) => ({ fingerprint, score: user.score, name: user.name }));
+
+    return res.json({ success: true, leaderboard });
+});
+
+const PORT = 3000;
+app.listen(PORT, () => console.log(`Сервер запущен по адресу http://localhost:${PORT}`));
